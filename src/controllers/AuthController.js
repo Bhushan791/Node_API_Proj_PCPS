@@ -1,14 +1,13 @@
 const User = require("../models/UserModel");
-const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const config = require("../configs/config");
 
 // Register a new user
 const register = async (req, res) => {
   try {
-    const { username, email, password } = req.body;
+    const { name, email, password } = req.body;
 
-    if (!username || !email || !password) {
+    if (!name || !email || !password) {
       return res.status(400).json({ error: "All fields are required" });
     }
 
@@ -17,10 +16,14 @@ const register = async (req, res) => {
       return res.status(400).json({ error: "User already exists" });
     }
 
-    const user = new User({ username, email, password });
+    const user = new User({ name, email, password });
     await user.save();
 
-    res.status(201).json({ message: "User registered successfully", user });
+    const { password: _, ...safeUser } = user.toObject();
+    res.status(201).json({ 
+      message: "User registered successfully", 
+      user: safeUser 
+    });
   } catch (error) {
     console.error("Error registering user:", error);
     res.status(500).json({ error: "Server error. Please try again later." });
@@ -41,7 +44,7 @@ const login = async (req, res) => {
       return res.status(400).json({ error: "Invalid email or password" });
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
+    const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       return res.status(400).json({ error: "Invalid email or password" });
     }
@@ -63,13 +66,19 @@ const login = async (req, res) => {
   }
 };
 
-// Get all users
-const getAllUsers = async (req, res) => {
+// Get user profile by ID
+const getUserProfile = async (req, res) => {
   try {
-    const users = await User.find().select("-password");
-    res.status(200).json({ users });
+    const { id } = req.params;
+    const user = await User.findById(id).select("-password");
+    
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    
+    res.status(200).json({ user });
   } catch (error) {
-    console.error("Error fetching users:", error);
+    console.error("Error fetching user profile:", error);
     res.status(500).json({ error: "Server error. Please try again later." });
   }
 };
@@ -77,11 +86,13 @@ const getAllUsers = async (req, res) => {
 // Delete user
 const deleteUser = async (req, res) => {
   try {
-    const { userId } = req.params;
-    const user = await User.findByIdAndDelete(userId);
+    const { id } = req.params;
+    const user = await User.findByIdAndDelete(id);
+    
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
+    
     res.status(200).json({ message: "User deleted successfully" });
   } catch (error) {
     console.error("Error deleting user:", error);
@@ -89,4 +100,4 @@ const deleteUser = async (req, res) => {
   }
 };
 
-module.exports = { register, login, getAllUsers, deleteUser };
+module.exports = { register, login, getUserProfile, deleteUser };
